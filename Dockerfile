@@ -9,4 +9,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD supergateway --port $PORT --stdio "railway-mcp $RAILWAY_API_TOKEN"
+CMD supergateway --port $PORT --stdio "npx @jasontanswe/railway-mcp" --cors
