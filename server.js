@@ -29,11 +29,16 @@ const server = http.createServer((req, res) => {
 
     res.write(`event: endpoint\ndata: /message?sessionId=${sessionId}\n\n`);
 
-    const child = spawn('npx', ['@jasontanswe/railway-mcp'], {
+    const child = spawn('railway-mcp', [], {
       env: { ...process.env },
     });
 
     sessions.set(sessionId, { child, res });
+
+    // Heartbeat every 30s to keep SSE connection alive
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
+    }, 30000);
 
     child.stdout.on('data', (data) => {
       data.toString().split('\n').filter(Boolean).forEach(line => {
@@ -43,16 +48,24 @@ const server = http.createServer((req, res) => {
 
     child.stderr.on('data', (d) => process.stderr.write(d));
 
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      clearInterval(heartbeat);
+      const s = sessions.get(sessionId);
+      if (s) { s.child.kill(); sessions.delete(sessionId); }
+    };
+
     child.on('exit', (code) => {
       console.log(`[${sessionId}] Child exited (code ${code})`);
-      sessions.delete(sessionId);
+      cleanup();
       try { res.end(); } catch {}
     });
 
     req.on('close', () => {
       console.log(`[${sessionId}] Client disconnected`);
-      const s = sessions.get(sessionId);
-      if (s) { s.child.kill(); sessions.delete(sessionId); }
+      cleanup();
     });
 
     return;
@@ -84,4 +97,11 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Railway MCP SSE server on port ${PORT}`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
 });
