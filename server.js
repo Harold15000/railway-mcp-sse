@@ -40,9 +40,13 @@ const server = http.createServer((req, res) => {
       try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
     }, 30000);
 
+    let buffer = '';
     child.stdout.on('data', (data) => {
-      data.toString().split('\n').filter(Boolean).forEach(line => {
-        res.write(`data: ${line}\n\n`);
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      lines.filter(Boolean).forEach(line => {
+        try { res.write(`data: ${line}\n\n`); } catch {}
       });
     });
 
